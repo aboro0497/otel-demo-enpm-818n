@@ -1,0 +1,53 @@
+name: Manual Deploy to EKS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy otel-demo via Helm on EC2
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Upload values file to EC2
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: k8s/otel-values-upgrade.yaml    
+          target: /home/ec2-user/
+
+      - name: SSH into EC2 and Run Helm Upgrade
+        id: deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            echo "Deploying otel-demo via Helm"
+            helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+            helm repo update
+            helm upgrade --install otel-demo open-telemetry/opentelemetry-demo \
+              --namespace otel-helm --create-namespace \
+              -f /home/ec2-user/otel-values-upgrade.yaml
+
+      - name: Rollback on Failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Previous step failed — initiating Helm rollback"
+            helm rollback otel-demo
+

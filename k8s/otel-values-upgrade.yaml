@@ -1,0 +1,14 @@
+replicaCount: 1
+
+adService:
+  enabled: true
+
+loadgenerator:
+  enabled: true
+
+otelCollector:
+  config:
+    exporters:
+      logging:
+        loglevel: debug
+
