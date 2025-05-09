@@ -48,8 +48,8 @@ jobs:
             docker tag ghcr.io/open-telemetry/demo:latest-frontend $ECR_REPO_URI:latest
             docker push $ECR_REPO_URI:latest
 
-            echo "Appending image config to Helm values file..."
-            echo -e "components:\n  frontend:\n    image:\n      repository: $ECR_REPO_URI\n      tag: latest" >> /home/ec2-user/otel-values-upgrade.yaml
+            # echo "Appending image config to Helm values file..."
+            # echo -e "components:\n  frontend:\n    image:\n      repository: $ECR_REPO_URI\n      tag: latest" >> /home/ec2-user/otel-values-upgrade.yaml
 
       - name: Run Image Smoke Test on EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -75,8 +75,11 @@ jobs:
             helm repo update
             helm upgrade --install otel-demo open-telemetry/opentelemetry-demo \
              --namespace otel-helm --create-namespace \
-             -f /home/ec2-user/otel-values-upgrade.yaml \
-             --disable-openapi-validation
+             -f /home/ec2-user/otel-values-upgrade.yaml 
+            echo "Patching frontend deployment with custom ECR image..."
+            kubectl set image deployment/frontend frontend=$ECR_REPO_URI:latest -n otel-helm
+            echo "Confirming frontend deployment with custom ECR image..."
+            kubectl get deployment frontend -n otel-helm -o jsonpath='{.spec.template.spec.containers[*].image}'; echo
 
 
   rollback:
