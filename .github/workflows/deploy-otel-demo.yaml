@@ -18,7 +18,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: k8s/otel-values-upgrade.yaml
+          source: ./k8s/otel-values-upgrade.yaml
           target: /home/ec2-user/
 
       - name: Upload docker-compose.yml to EC2
@@ -27,7 +27,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: k8s/docker-compose.yml
+          source: ./k8s/docker-compose.yml
           target: /home/ec2-user/
 
       - name: SSH into EC2 to Build, Push to ECR, Update Values File
