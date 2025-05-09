@@ -44,7 +44,7 @@ jobs:
           envs: AWS_REGION,ECR_REPO_URI
           script_stop: true
           script: |
-            cd /home/ec2-user/
+            cd /home/ec2-user/debug/k8s
 
             # Inject secrets as env vars inside the remote EC2 session
             export ECR_REPO_URI="${{ secrets.ECR_REPO_URI }}"
