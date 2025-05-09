@@ -103,6 +103,31 @@ jobs:
             echo "Confirming frontend deployment with custom ECR image..."
             kubectl get deployment frontend -n otel-helm -o jsonpath='{.spec.template.spec.containers[*].image}'; echo
 
+            echo "Checking if 'frontend-proxy' service is already LoadBalancer..."
+            SERVICE_TYPE=$(kubectl get svc frontend-proxy -n otel-helm -o jsonpath='{.spec.type}')
+            if [ "$SERVICE_TYPE" != "LoadBalancer" ]; then
+              echo "Patching 'frontend-proxy' to LoadBalancer..."
+              kubectl patch svc frontend-proxy -n otel-helm -p '{"spec": {"type": "LoadBalancer"}}'
+              echo "Waiting for external hostname..."
+              for i in {1..20}; do
+                HOSTNAME=$(kubectl get svc frontend-proxy -n otel-helm -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+                if [ -n "$HOSTNAME" ]; then
+                  echo "Grafana is accessible at: http://$HOSTNAME:8080/grafana"
+                  break
+                fi
+                echo "Waiting for LoadBalancer to become ready..."
+                sleep 10
+              done
+              if [ -z "$HOSTNAME" ]; then
+                echo "⚠️ LoadBalancer did not become ready in time."
+              fi
+            else
+              echo "Service is already exposed via LoadBalancer."
+              HOSTNAME=$(kubectl get svc frontend-proxy -n otel-helm -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+              echo "Grafana is accessible at: http://$HOSTNAME:8080/grafana"
+            fi
+
+
   rollback:
     name: Rollback if Deploy Fails
     needs: deploy
@@ -123,4 +148,7 @@ jobs:
             else
               echo "No existing release to roll back. Skipping."
             fi
+      
+
+    
 
