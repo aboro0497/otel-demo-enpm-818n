@@ -42,10 +42,10 @@ jobs:
             aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REPO_URI"
 
             echo "Building only the otel-frontend service..."
-            docker compose -f docker-compose.yml build otel-frontend
+            docker compose -f docker-compose.yml build frontend
 
             echo "Tagging and pushing image to ECR..."
-            docker tag otel-frontend:latest $ECR_REPO_URI:latest
+            docker tag frontend:latest $ECR_REPO_URI:latest
             docker push $ECR_REPO_URI:latest
 
             echo "Appending image config to Helm values file..."
