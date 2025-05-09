@@ -49,7 +49,7 @@ jobs:
             docker push $ECR_REPO_URI:latest
 
             echo "Appending image config to Helm values file..."
-            echo -e "frontend:\n  image:\n    repository: $ECR_REPO_URI\n    tag: latest" >> /home/ec2-user/otel-values-upgrade.yaml
+            echo -e "components:\n  frontend:\n    image:\n      repository: $ECR_REPO_URI\n      tag: latest" >> /home/ec2-user/otel-values-upgrade.yaml
 
       - name: Run Image Smoke Test on EC2
         uses: appleboy/ssh-action@v1.0.3
