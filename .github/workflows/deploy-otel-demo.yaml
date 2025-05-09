@@ -12,13 +12,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Upload Helm values file as artifact
-        uses: actions/upload-artifact@v3
+      - name: Upload otel-values-upgrade.yaml to EC2
+        uses: appleboy/scp-action@v0.1.4
         with:
-          name: helm-values
-          path: ./k8s/otel-values-upgrade.yaml
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: ./k8s/otel-values-upgrade.yaml
+          target: /home/ec2-user/
 
-      - name: SSH into EC2 and Clone + Build + Push
+      - name: SSH into EC2 to Clone, Build, Push to ECR
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -67,12 +70,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download Helm values artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: helm-values
-          path: ./k8s/
-
       - name: Upload otel-values-upgrade.yaml to EC2
         uses: appleboy/scp-action@v0.1.4
         with:
@@ -96,7 +93,7 @@ jobs:
             helm repo update
             helm upgrade --install otel-demo open-telemetry/opentelemetry-demo \
               --namespace otel-helm --create-namespace \
-              -f /home/ec2-user/k8s/otel-values-upgrade.yaml
+              -f /home/ec2-user/otel-values-upgrade.yaml 
 
             echo "Patching frontend deployment with custom ECR image..."
             kubectl set image deployment/frontend frontend=${{ secrets.ECR_REPO_URI }}:latest -n otel-helm
