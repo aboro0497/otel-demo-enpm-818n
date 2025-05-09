@@ -4,24 +4,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-deploy:
-    name: Build, Push to ECR & Deploy to EKS
+  build-push:
+    name: Clone, Build Docker Image, Push to ECR
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Upload otel-values-upgrade.yaml to EC2
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: ./k8s/otel-values-upgrade.yaml
-          target: /home/ec2-user/
-
-      - name: SSH into EC2 to Clone, Build, Push to ECR
+      - name: SSH into EC2 and Clone + Build + Push
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -41,17 +32,19 @@ jobs:
             echo "Logging in to ECR..."
             aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REPO_URI"
 
-            echo "Building only the otel-frontend service..."
+            echo "Building only the 'frontend' service..."
             docker compose -f docker-compose.yml build frontend
 
             echo "Tagging and pushing image to ECR..."
             docker tag ghcr.io/open-telemetry/demo:latest-frontend $ECR_REPO_URI:latest
             docker push $ECR_REPO_URI:latest
 
-            # echo "Appending image config to Helm values file..."
-            # echo -e "components:\n  frontend:\n    image:\n      repository: $ECR_REPO_URI\n      tag: latest" >> /home/ec2-user/otel-values-upgrade.yaml
-
-      - name: Run Image Smoke Test on EC2
+  smoke-test:
+    name: Run Smoke Test on ECR Image
+    needs: build-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into EC2 and Run Smoke Test
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -61,7 +54,21 @@ jobs:
             echo "Running docker image test..."
             docker run --rm --entrypoint "" ${{ secrets.ECR_REPO_URI }}:latest /bin/sh -c "echo 'Image is working!'"
 
-      - name: SSH into EC2 and Run Helm Upgrade
+  deploy:
+    name: Deploy to EKS via Helm
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload otel-values-upgrade.yaml to EC2
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: ./k8s/otel-values-upgrade.yaml
+          target: /home/ec2-user/
+
+      - name: SSH into EC2 and Run Helm Upgrade + Patch
         id: deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -75,16 +82,17 @@ jobs:
             helm repo update
             helm upgrade --install otel-demo open-telemetry/opentelemetry-demo \
              --namespace otel-helm --create-namespace \
-             -f /home/ec2-user/otel-values-upgrade.yaml 
+             -f /home/ec2-user/otel-values-upgrade.yaml
+
             echo "Patching frontend deployment with custom ECR image..."
             kubectl set image deployment/frontend frontend=${{ secrets.ECR_REPO_URI }}:latest -n otel-helm
+
             echo "Confirming frontend deployment with custom ECR image..."
             kubectl get deployment frontend -n otel-helm -o jsonpath='{.spec.template.spec.containers[*].image}'; echo
 
-
   rollback:
     name: Rollback if Deploy Fails
-    needs: build-deploy
+    needs: deploy
     if: failure()
     runs-on: ubuntu-latest
     steps:
@@ -97,5 +105,3 @@ jobs:
           script: |
             echo "Deployment failed — rolling back..."
             helm rollback otel-demo
-
-
