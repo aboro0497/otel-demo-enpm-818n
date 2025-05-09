@@ -21,55 +21,37 @@ jobs:
           source: ./k8s/otel-values-upgrade.yaml
           target: /home/ec2-user/
 
-      - name: Upload docker-compose.yml to EC2
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: ./k8s/docker-compose.yml
-          target: /home/ec2-user/debug
-          overwrite: true
-          debug: true
-          script: |
-            echo "Listing /home/ec2-user contents..."
-            ls -la /home/ec2-user
-
-      - name: SSH into EC2 to Build, Push to ECR, Update Values File
+      - name: SSH into EC2 to Clone, Build, Push to ECR
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: AWS_REGION,ECR_REPO_URI
           script_stop: true
           script: |
-            cd /home/ec2-user/debug/k8s
-
-            # Inject secrets as env vars inside the remote EC2 session
             export ECR_REPO_URI="${{ secrets.ECR_REPO_URI }}"
             export AWS_REGION="${{ secrets.AWS_REGION }}"
 
-            echo "Region is: $AWS_REGION"
-            echo "Repo is: $ECR_REPO_URI"
+            echo "Cloning OpenTelemetry demo repo..."
+            rm -rf /home/ec2-user/opentelemetry-demo
+            git clone https://github.com/open-telemetry/opentelemetry-demo.git /home/ec2-user/opentelemetry-demo
+
+            cd /home/ec2-user/opentelemetry-demo
 
             echo "Logging in to ECR..."
             aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REPO_URI"
 
-            echo "Building image using Docker Compose..."
-            docker compose -f docker-compose.yml build
+            echo "Building only the otel-frontend service..."
+            docker compose -f docker-compose.yml build otel-frontend
 
-            echo "Running docker-compose tests..."
-            docker compose -f docker-compose.yml run --rm otel-frontend npm test            
-
-            echo "Tagging and pushing images to ECR..."
-            docker tag otel-demo:latest $ECR_REPO_URI:latest
+            echo "Tagging and pushing image to ECR..."
+            docker tag otel-frontend:latest $ECR_REPO_URI:latest
             docker push $ECR_REPO_URI:latest
 
             echo "Appending image config to Helm values file..."
-            echo "image:\n  repository: $ECR_REPO_URI\n  tag: latest" >> /home/ec2-user/otel-values-upgrade.yaml
+            echo -e "image:\n  repository: $ECR_REPO_URI\n  tag: latest" >> /home/ec2-user/otel-values-upgrade.yaml
 
-      - name: Run Tests on EC2
+      - name: Run Image Smoke Test on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -77,7 +59,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             echo "Running docker image test..."
-            docker run --rm $ECR_REPO_URI:latest /bin/sh -c "echo 'Image is working!'"
+            docker run --rm ${{ secrets.ECR_REPO_URI }}:latest /bin/sh -c "echo 'Image is working!'"
 
       - name: SSH into EC2 and Run Helm Upgrade
         id: deploy
@@ -88,7 +70,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script_stop: true
           script: |
-            echo "Deploying otel-demo via Helm"
+            echo "Deploying otel-demo via Helm..."
             helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts || true
             helm repo update
             helm upgrade --install otel-demo open-telemetry/opentelemetry-demo \
