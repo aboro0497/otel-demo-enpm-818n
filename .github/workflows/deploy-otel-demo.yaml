@@ -20,6 +20,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           source: ./k8s/otel-values-upgrade.yaml
           target: /home/ec2-user/
+          overwrite: true
 
       - name: SSH into EC2 to Clone, Build, Push to ECR
         uses: appleboy/ssh-action@v1.0.3
@@ -70,15 +71,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Upload otel-values-upgrade.yaml to EC2
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: ./k8s/otel-values-upgrade.yaml
-          target: /home/ec2-user/
-          overwrite: true
+      # - name: Upload otel-values-upgrade.yaml to EC2
+      #   uses: appleboy/scp-action@v0.1.4
+      #   with:
+      #     host: ${{ secrets.EC2_HOST }}
+      #     username: ec2-user
+      #     key: ${{ secrets.EC2_SSH_KEY }}
+      #     source: ./k8s/otel-values-upgrade.yaml
+      #     target: /home/ec2-user/
+      #     overwrite: true
 
       - name: SSH into EC2 and Run Helm Upgrade + Patch
         id: deploy
