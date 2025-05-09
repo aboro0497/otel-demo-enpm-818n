@@ -59,7 +59,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             echo "Running docker image test..."
-            docker run --rm --entrypoint "" $ECR_REPO_URI:latest /bin/sh -c "echo 'Image is working!'"
+            docker run --rm --entrypoint "" ${{ secrets.ECR_REPO_URI }}:latest /bin/sh -c "echo 'Image is working!'"
 
       - name: SSH into EC2 and Run Helm Upgrade
         id: deploy
