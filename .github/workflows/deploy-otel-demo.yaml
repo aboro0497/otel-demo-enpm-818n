@@ -28,7 +28,7 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           source: ./k8s/docker-compose.yml
-          target: /home/ec2-user/
+          target: /home/ec2-user/docker-compose.yml
 
       - name: SSH into EC2 to Build, Push to ECR, Update Values File
         uses: appleboy/ssh-action@v1.0.3
