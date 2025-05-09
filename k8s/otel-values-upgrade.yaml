@@ -12,3 +12,8 @@ otelCollector:
       logging:
         loglevel: debug
 
+image:
+  repository: 390844754612.dkr.ecr.us-east-1.amazonaws.com/otel-demo
+  tag: frontend
+
+

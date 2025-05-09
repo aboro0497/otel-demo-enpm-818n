@@ -4,25 +4,68 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
-    name: Deploy otel-demo via Helm on EC2
+  build-deploy:
+    name: Build, Push to ECR & Deploy to EKS
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Upload values file to EC2
+      - name: Upload otel-values-upgrade.yaml to EC2
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: k8s/otel-values-upgrade.yaml    
+          source: k8s/otel-values-upgrade.yaml
           target: /home/ec2-user/
+
+      - name: Upload docker-compose.yml to EC2
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: k8s/docker-compose.yml
+          target: /home/ec2-user/
+
+      - name: SSH into EC2 to Build, Push to ECR, Update Values File
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: AWS_REGION,ECR_REPO_URI
+          script_stop: true
+          script: |
+            cd /home/ec2-user/
+
+            echo "Logging in to ECR..."
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URI
+
+            echo "Building image using Docker Compose..."
+            docker compose -f docker-compose.yml build
+
+            echo "Running docker-compose tests..."
+            docker compose -f docker-compose.yml run --rm otel-frontend npm test            
+
+            echo "Tagging and pushing images to ECR..."
+            docker tag otel-demo:latest $ECR_REPO_URI:latest
+            docker push $ECR_REPO_URI:latest
+
+            echo "Appending image config to Helm values file..."
+            echo "image:\n  repository: $ECR_REPO_URI\n  tag: latest" >> /home/ec2-user/otel-values-upgrade.yaml
+
+      - name: Run Tests on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Running docker image test..."
+            docker run --rm $ECR_REPO_URI:latest /bin/sh -c "echo 'Image is working!'"
 
       - name: SSH into EC2 and Run Helm Upgrade
         id: deploy
@@ -34,20 +77,24 @@ jobs:
           script_stop: true
           script: |
             echo "Deploying otel-demo via Helm"
-            helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+            helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts || true
             helm repo update
             helm upgrade --install otel-demo open-telemetry/opentelemetry-demo \
               --namespace otel-helm --create-namespace \
               -f /home/ec2-user/otel-values-upgrade.yaml
 
-      - name: Rollback on Failure
-        if: failure()
+  rollback:
+    name: Rollback if Deploy Fails
+    needs: build-deploy
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into EC2 to Rollback
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "Previous step failed — initiating Helm rollback"
+            echo "Deployment failed — rolling back..."
             helm rollback otel-demo
-
