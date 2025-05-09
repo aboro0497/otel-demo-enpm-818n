@@ -74,8 +74,10 @@ jobs:
             helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts || true
             helm repo update
             helm upgrade --install otel-demo open-telemetry/opentelemetry-demo \
-              --namespace otel-helm --create-namespace \
-              -f /home/ec2-user/otel-values-upgrade.yaml
+             --namespace otel-helm --create-namespace \
+             -f /home/ec2-user/otel-values-upgrade.yaml \
+             --disable-openapi-validation
+
 
   rollback:
     name: Rollback if Deploy Fails
