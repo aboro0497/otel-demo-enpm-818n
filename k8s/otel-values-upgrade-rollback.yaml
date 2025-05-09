@@ -1,0 +1,17 @@
+grafana:
+  smtp:
+    enabled: true
+    host: smtp.gmail.com:587
+    user: aboroni049@gmail.com
+    password: 'easr mcvn ysnp kiqh'
+    from_address: aboroni049@gmail.com
+    skip_verify: false
+  env:
+    GF_SMTP_ENABLED: "true"
+    GF_SMTP_HOST: "smtp.gmail.com:587"
+    GF_SMTP_USER: "aboroni049@gmail.com"
+    GF_SMTP_PASSWORD: "easr mcvn ysnp kiqh"
+    GF_SMTP_FROM_ADDRESS: "aboroni049@gmail.com"
+
+replicaCount: 1  # this will break the schema
+
