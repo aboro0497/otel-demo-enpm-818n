@@ -111,12 +111,16 @@ jobs:
 
     steps:
       - name: SSH into EC2 to Rollback
-        # if: ${{ failure() }} 
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "Deployment failed — rolling back..."
-            helm rollback otel-demo
+            echo "Deployment failed — attempting rollback..."
+            if helm status otel-demo >/dev/null 2>&1; then
+              helm rollback otel-demo
+            else
+              echo "No existing release to roll back. Skipping."
+            fi
+
