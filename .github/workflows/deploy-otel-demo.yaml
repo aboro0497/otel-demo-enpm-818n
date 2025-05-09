@@ -45,7 +45,7 @@ jobs:
             docker compose -f docker-compose.yml build frontend
 
             echo "Tagging and pushing image to ECR..."
-            docker tag frontend:latest $ECR_REPO_URI:latest
+            docker tag ghcr.io/open-telemetry/demo:latest-frontend $ECR_REPO_URI:latest
             docker push $ECR_REPO_URI:latest
 
             echo "Appending image config to Helm values file..."
