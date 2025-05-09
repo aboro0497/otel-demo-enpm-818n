@@ -42,7 +42,7 @@ jobs:
             cd /home/ec2-user/
 
             echo "Logging in to ECR..."
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO_URI
+            aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REPO_URI"
 
             echo "Building image using Docker Compose..."
             docker compose -f docker-compose.yml build
