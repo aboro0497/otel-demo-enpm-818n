@@ -12,5 +12,10 @@ grafana:
     GF_SMTP_USER: "aboroni049@gmail.com"
     GF_SMTP_PASSWORD: "easr mcvn ysnp kiqh"
     GF_SMTP_FROM_ADDRESS: "aboroni049@gmail.com"
-
-
+  grafana.ini:
+    auth:
+      disable_login_form: false
+    auth.anonymous:
+      enabled: false
+  adminUser: admin
+  adminPassword: admin
