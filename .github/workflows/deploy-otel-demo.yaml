@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-push:
-    name: Build Docker Image, Push to ECR
+    name: Build Image, Push to ECR
     runs-on: ubuntu-latest
 
     steps:
@@ -106,12 +106,12 @@ jobs:
   rollback:
     name: Rollback if Deploy Fails
     needs: deploy
-    if: always()
+    if: failure() 
     runs-on: ubuntu-latest
 
     steps:
       - name: SSH into EC2 to Rollback
-        if: ${{ failure() }} 
+        # if: ${{ failure() }} 
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}

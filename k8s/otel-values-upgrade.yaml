@@ -13,5 +13,5 @@ grafana:
     GF_SMTP_PASSWORD: "easr mcvn ysnp kiqh"
     GF_SMTP_FROM_ADDRESS: "aboroni049@gmail.com"
 
-# replicaCount: 1  # this will break the schema
+replicaCount: 1  # this will break the schema
 
