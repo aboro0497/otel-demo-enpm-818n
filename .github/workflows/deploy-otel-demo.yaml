@@ -41,6 +41,13 @@ jobs:
           script: |
             cd /home/ec2-user/
 
+            # Inject secrets as env vars inside the remote EC2 session
+            export ECR_REPO_URI="${{ secrets.ECR_REPO_URI }}"
+            export AWS_REGION="${{ secrets.AWS_REGION }}"
+
+            echo "Region is: $AWS_REGION"
+            echo "Repo is: $ECR_REPO_URI"
+
             echo "Logging in to ECR..."
             aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REPO_URI"
 
