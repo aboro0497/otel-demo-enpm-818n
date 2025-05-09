@@ -77,7 +77,7 @@ jobs:
              --namespace otel-helm --create-namespace \
              -f /home/ec2-user/otel-values-upgrade.yaml 
             echo "Patching frontend deployment with custom ECR image..."
-            kubectl set image deployment/frontend frontend=$ECR_REPO_URI:latest -n otel-helm
+            kubectl set image deployment/frontend frontend=${{ secrets.ECR_REPO_URI }}:latest -n otel-helm
             echo "Confirming frontend deployment with custom ECR image..."
             kubectl get deployment frontend -n otel-helm -o jsonpath='{.spec.template.spec.containers[*].image}'; echo
 
