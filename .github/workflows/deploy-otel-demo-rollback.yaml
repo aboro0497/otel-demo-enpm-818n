@@ -1,0 +1,126 @@
+name: Manual Deploy to EKS (Rollback)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-push:
+    name: Build Image, Push to ECR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Upload otel-values-upgrade.yaml to EC2
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: ./k8s/otel-values-upgrade-rollback.yaml
+          target: /home/ec2-user/
+          overwrite: true
+
+      - name: SSH into EC2 to Clone, Build, Push to ECR
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            export ECR_REPO_URI="${{ secrets.ECR_REPO_URI }}"
+            export AWS_REGION="${{ secrets.AWS_REGION }}"
+
+            echo "Cloning OpenTelemetry demo repo..."
+            rm -rf /home/ec2-user/opentelemetry-demo
+            git clone https://github.com/open-telemetry/opentelemetry-demo.git /home/ec2-user/opentelemetry-demo
+
+            cd /home/ec2-user/opentelemetry-demo
+
+            echo "Logging in to ECR..."
+            aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REPO_URI"
+
+            echo "Building only the 'frontend' service..."
+            docker compose -f docker-compose.yml build frontend
+
+            echo "Tagging and pushing image to ECR..."
+            docker tag ghcr.io/open-telemetry/demo:latest-frontend $ECR_REPO_URI:latest
+            docker push $ECR_REPO_URI:latest
+
+  smoke-test:
+    name: Run Smoke Test on ECR Image
+    needs: build-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH into EC2 and Run Smoke Test
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Running docker image test..."
+            docker run --rm --entrypoint "" ${{ secrets.ECR_REPO_URI }}:latest /bin/sh -c "echo 'Image is working!'"
+
+  deploy:
+    name: Deploy to EKS via Helm
+    needs: smoke-test
+    runs-on: ubuntu-latest
+
+    steps:
+      # - name: Upload otel-values-upgrade.yaml to EC2
+      #   uses: appleboy/scp-action@v0.1.4
+      #   with:
+      #     host: ${{ secrets.EC2_HOST }}
+      #     username: ec2-user
+      #     key: ${{ secrets.EC2_SSH_KEY }}
+      #     source: ./k8s/otel-values-upgrade.yaml
+      #     target: /home/ec2-user/
+      #     overwrite: true
+
+      - name: SSH into EC2 and Run Helm Upgrade + Patch
+        id: deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            echo "Deploying otel-demo via Helm..."
+            helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts || true
+            helm repo update
+            helm upgrade --install otel-demo open-telemetry/opentelemetry-demo \
+              --namespace otel-helm --create-namespace \
+              -f /home/ec2-user/k8s/otel-values-upgrade-rollback.yaml 
+
+            echo "Patching frontend deployment with custom ECR image..."
+            kubectl set image deployment/frontend frontend=${{ secrets.ECR_REPO_URI }}:latest -n otel-helm
+
+            echo "Confirming frontend deployment with custom ECR image..."
+            kubectl get deployment frontend -n otel-helm -o jsonpath='{.spec.template.spec.containers[*].image}'; echo
+
+  rollback:
+    name: Rollback if Deploy Fails
+    needs: deploy
+    if: failure() 
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH into EC2 to Rollback
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Deployment failed — attempting rollback..."
+            if helm status otel-demo >/dev/null 2>&1; then
+              helm rollback otel-demo
+            else
+              echo "No existing release to roll back. Skipping."
+            fi
+
