@@ -33,6 +33,11 @@ jobs:
             export ECR_REPO_URI="${{ secrets.ECR_REPO_URI }}"
             export AWS_REGION="${{ secrets.AWS_REGION }}"
 
+            echo "🧹 Cleaning up disk space on EC2..."
+            docker system prune -af --volumes || true
+            sudo rm -rf /var/cache/yum /tmp/* || true
+            echo "✅ Cleanup complete"
+
             echo "Cloning OpenTelemetry demo repo..."
             rm -rf /home/ec2-user/opentelemetry-demo
             git clone https://github.com/open-telemetry/opentelemetry-demo.git /home/ec2-user/opentelemetry-demo
@@ -48,6 +53,7 @@ jobs:
             echo "Tagging and pushing image to ECR..."
             docker tag ghcr.io/open-telemetry/demo:latest-frontend $ECR_REPO_URI:latest
             docker push $ECR_REPO_URI:latest
+
 
   smoke-test:
     name: Run Smoke Test on ECR Image

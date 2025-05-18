@@ -2,3 +2,8 @@
 *.tfstate
 *.tfstate.backup
 .terraform.lock.hcl
+node_modules
+*.log
+dist
+.git
+__pycache__
